@@ -1,0 +1,559 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      let context = null
+      const HEIGHT = 500
+      const WIDTH = 500
+
+      const FIELD_SIDE = 55
+
+      const HOME_POSITION = 0
+      const START_POSITION = 1
+      const SAFE_POSITION = 8
+      const FINISH_POSITION = 15
+
+      let gameState = {
+        currentPlayerIndex: 0,
+        players: [
+          {
+            pawns: [
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+            ],
+            rollResult: null,
+          },
+          {
+            pawns: [
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+              HOME_POSITION,
+            ],
+            rollResult: null,
+          },
+        ],
+      }
+
+      const boardFields = getBoardFields()
+
+      function getOtherPlayerIndex() {
+        return (gameState.currentPlayerIndex + 1) % 2
+      }
+
+      function switchPlayer() {
+        gameState.players[gameState.currentPlayerIndex].rollResult = null
+        gameState.currentPlayerIndex = getOtherPlayerIndex()
+      }
+
+      function urDiceRoll() {
+        return Math.random() > 0.5 ? 1 : 0
+      }
+
+      function clickedInside(x, y, rectX, rectY, rectWidth, rectHeight) {
+        return (
+          x > rectX &&
+          x < rectX + rectWidth &&
+          y > rectY &&
+          y < rectY + rectHeight
+        )
+      }
+
+      function handleDiceRoll(x, y) {
+        if (
+          gameState.players[gameState.currentPlayerIndex].rollResult === null &&
+          clickedInside(x, y, ...getDieRect(gameState.currentPlayerIndex))
+        ) {
+          const rollResult =
+            urDiceRoll() + urDiceRoll() + urDiceRoll() + urDiceRoll()
+          gameState.players[
+            gameState.currentPlayerIndex
+          ].rollResult = rollResult
+
+          if (rollResult === 0) {
+            switchPlayer()
+          } else {
+            const noActivePlayers = gameState.players[
+              gameState.currentPlayerIndex
+            ].pawns.every(
+              (position) =>
+                position === HOME_POSITION || position === FINISH_POSITION
+            )
+
+            if (noActivePlayers) {
+              const nextHomePawnIndex = gameState.players[
+                gameState.currentPlayerIndex
+              ].pawns.findIndex((position) => position === HOME_POSITION)
+              gameState.players[gameState.currentPlayerIndex].pawns[
+                nextHomePawnIndex
+              ] = START_POSITION
+
+              gameState.players[gameState.currentPlayerIndex].rollResult = null
+              switchPlayer()
+            }
+          }
+        }
+      }
+
+      function handleNewPawn(x, y) {
+        if (
+          gameState.players[gameState.currentPlayerIndex].pawns.findIndex(
+            (position) => position === START_POSITION
+          ) === -1 &&
+          clickedInside(
+            x,
+            y,
+            ...getPlayerSummaryRect(gameState.currentPlayerIndex)
+          )
+        ) {
+          const nextPawnIndex = gameState.players[
+            gameState.currentPlayerIndex
+          ].pawns.findIndex((position) => position === HOME_POSITION)
+          gameState.players[gameState.currentPlayerIndex].pawns[
+            nextPawnIndex
+          ] = START_POSITION
+
+          switchPlayer()
+        }
+      }
+
+      function isSafeArea(position) {
+        return position < 5 || position > 12
+      }
+
+      function canMove(position, summand) {
+        const targetPosition = position + summand
+        if (targetPosition > FINISH_POSITION) {
+          console.log(
+            "cannot move, because the player needs to exactly hit finish"
+          )
+          return false
+        }
+        if (
+          gameState.players[gameState.currentPlayerIndex].pawns.findIndex(
+            (friendlyPawnPosition) =>
+              friendlyPawnPosition < FINISH_POSITION &&
+              friendlyPawnPosition === targetPosition
+          ) > -1
+        ) {
+          console.log(
+            "cannot move, because there's a friendly player in the way"
+          )
+          return false
+        }
+        if (
+          gameState.players[getOtherPlayerIndex()].pawns.findIndex(
+            (enemyPawnPosition) => enemyPawnPosition === targetPosition
+          ) > -1
+        ) {
+          if (targetPosition === SAFE_POSITION) {
+            console.log(
+              "cannot move, because the enemy is residing on the safe field"
+            )
+            return false
+          }
+          return true
+        }
+        if (targetPosition === FINISH_POSITION) {
+          return true
+        }
+        return true
+      }
+
+      function handleMovePawn(movingPawnIndex, summand) {
+        const targetPosition =
+          gameState.players[gameState.currentPlayerIndex].pawns[
+            movingPawnIndex
+          ] + summand
+
+        const ownPawnIndex = gameState.players[
+          gameState.currentPlayerIndex
+        ].pawns.findIndex((position) => position === targetPosition)
+
+        if (
+          canMove(
+            gameState.players[gameState.currentPlayerIndex].pawns[
+              movingPawnIndex
+            ],
+            summand
+          )
+        ) {
+          gameState.players[gameState.currentPlayerIndex].pawns[
+            movingPawnIndex
+          ] = targetPosition
+
+          const enemyPawnIndex = gameState.players[
+            getOtherPlayerIndex()
+          ].pawns.findIndex(
+            (position) =>
+              position === targetPosition && !isSafeArea(targetPosition)
+          )
+
+          if (enemyPawnIndex > -1) {
+            gameState.players[getOtherPlayerIndex()].pawns[
+              enemyPawnIndex
+            ] = HOME_POSITION
+          }
+          switchPlayer()
+        } else if (
+          !gameState.players[gameState.currentPlayerIndex].pawns.some(
+            (position) =>
+              position !== HOME_POSITION &&
+              position !== FINISH_POSITION &&
+              canMove(position, summand)
+          ) ||
+          (gameState.players[gameState.currentPlayerIndex].rollResult === 4 &&
+            gameState.players[gameState.currentPlayerIndex].pawns.some(
+              (position) => position === HOME_POSITION
+            ))
+        ) {
+          console.log("no pawn can move, so it's the other player's turn")
+          switchPlayer()
+        }
+      }
+
+      function getClickedField(x, y) {
+        return boardFields.find(({ x: rectX, y: rectY }) =>
+          clickedInside(x, y, rectX, rectY, FIELD_SIDE, FIELD_SIDE)
+        )
+      }
+
+      function init() {
+        const canvas = document.createElement("canvas")
+        canvas.height = HEIGHT
+        canvas.width = WIDTH
+
+        context = canvas.getContext("2d")
+
+        draw()
+
+        canvas.addEventListener("mousedown", (event) => {
+          const { top, left } = canvas.getBoundingClientRect()
+          const [x, y] = [event.x - left, event.y - top]
+
+          handleDiceRoll(x, y)
+
+          handleNewPawn(x, y)
+
+          if (getWinner() !== undefined) {
+            gameState = {
+              currentPlayerIndex: 0,
+              players: [
+                {
+                  pawns: [
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                  ],
+                  rollResult: null,
+                },
+                {
+                  pawns: [
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                    HOME_POSITION,
+                  ],
+                  rollResult: null,
+                },
+              ],
+            }
+          }
+
+          if (
+            gameState.players[gameState.currentPlayerIndex].rollResult !== null
+          ) {
+            const clickedField = getClickedField(x, y)
+
+            if (clickedField) {
+              const pawnIndexOnField = gameState.players[
+                gameState.currentPlayerIndex
+              ].pawns.findIndex((pawnField) =>
+                matchFieldWithPawn(
+                  gameState.currentPlayerIndex,
+                  pawnField,
+                  clickedField
+                )
+              )
+
+              if (pawnIndexOnField > -1) {
+                const nextPawnPosition =
+                  gameState.players[gameState.currentPlayerIndex].pawns[
+                    pawnIndexOnField
+                  ] + gameState.players[gameState.currentPlayerIndex].rollResult
+
+                handleMovePawn(
+                  pawnIndexOnField,
+                  gameState.players[gameState.currentPlayerIndex].rollResult
+                )
+              }
+            }
+          }
+
+          draw()
+        })
+
+        document.body.appendChild(canvas)
+      }
+
+      function getWinner() {
+        return [0, 1].find((playerIndex) => {
+          return gameState.players[playerIndex].pawns.every(
+            (position) => position === FINISH_POSITION
+          )
+        })
+      }
+
+      function draw() {
+        context.clearRect(0, 0, WIDTH, HEIGHT)
+        drawBoard()
+        drawPlayerSummary(0)
+        drawPlayerSummary(1)
+        drawPawns(0)
+        drawPawns(1)
+
+        const players = [0, 1]
+
+        const winner = getWinner()
+
+        if (winner !== undefined) {
+          const isPlayer1 = winner === 0
+          context.fillStyle = "rgba(0,0,0,0.2)"
+          context.fillRect(0, 0, WIDTH, HEIGHT)
+          context.fillStyle = isPlayer1 ? "#aa4" : "#77b"
+          context.strokeStyle = isPlayer1 ? "#dda" : "#bbf"
+          context.font = "45px monospace"
+          context.lineWidth = "15"
+          context.miterLimit = "2"
+          context.strokeText(
+            isPlayer1 ? "Player 1 won!" : "Player 2 won!",
+            80,
+            HEIGHT / 2 - FIELD_SIDE
+          )
+          context.fillText(
+            isPlayer1 ? "Player 1 won!" : "Player 2 won!",
+            80,
+            HEIGHT / 2 - FIELD_SIDE
+          )
+        }
+      }
+
+      function matchFieldWithPawn(playerIndex, pawnField, boardField) {
+        const isPlayer1 = playerIndex % 2 === 0
+        return (
+          pawnField === boardField.fieldNumber &&
+          (boardField.id.startsWith(isPlayer1 ? "p1_" : "p2_") ||
+            boardField.id === String(boardField.fieldNumber))
+        )
+      }
+
+      function drawPawns(playerIndex) {
+        const isPlayer1 = playerIndex % 2 === 0
+        context.beginPath()
+
+        context.fillStyle = isPlayer1 ? "#aa4" : "#77b"
+
+        gameState.players[playerIndex].pawns.forEach((pawnField) => {
+          if (pawnField > HOME_POSITION && pawnField < FINISH_POSITION) {
+            const { x, y } = boardFields.find((boardField) =>
+              matchFieldWithPawn(playerIndex, pawnField, boardField)
+            )
+
+            context.fillRect(
+              x + FIELD_SIDE / 3,
+              y + FIELD_SIDE / 3,
+              FIELD_SIDE / 3,
+              FIELD_SIDE / 3
+            )
+          }
+        })
+      }
+
+      function getBoardFields() {
+        let fields = []
+
+        // center column
+        fields = fields.concat(
+          Array.from({ length: 8 }).map((_, index) => {
+            const xPos = WIDTH / 2 - FIELD_SIDE / 2
+            const yPos = 15 + (FIELD_SIDE + 5) * index
+
+            const fieldNumber = index + 5
+            return {
+              fieldNumber,
+              id: String(fieldNumber),
+              label: fieldNumber === 8 ? "*" : fieldNumber,
+              x: xPos,
+              y: yPos,
+            }
+          })
+        )
+
+        Array.from({ length: 2 }).forEach((_, sideIndex) => {
+          const sideFactor = sideIndex % 2 === 0 ? -1 : 1
+
+          // upper 4 field group, both sides
+          fields = fields.concat(
+            Array.from({ length: 4 }).map((_, index) => {
+              const xPos =
+                WIDTH / 2 - (FIELD_SIDE + 5) * sideFactor - FIELD_SIDE / 2
+              const yPos = 15 + (FIELD_SIDE + 5) * index
+
+              const fieldNumber = 4 - index
+              return {
+                fieldNumber,
+                id: (sideFactor === 1 ? "p1_" : "p2_") + fieldNumber,
+                label: fieldNumber,
+                x: xPos,
+                y: yPos,
+              }
+            })
+          )
+
+          // lower 2 field group, both sides
+          fields = fields.concat(
+            Array.from({ length: 2 }).map((_, index) => {
+              const xPos =
+                WIDTH / 2 - (FIELD_SIDE + 5) * sideFactor - FIELD_SIDE / 2
+              const yPos = 15 + (FIELD_SIDE + 5) * (index + 6)
+
+              const fieldNumber = 2 - index + 12
+              return {
+                fieldNumber,
+                id: (sideFactor === 1 ? "p1_" : "p2_") + fieldNumber,
+                label: fieldNumber,
+                x: xPos,
+                y: yPos,
+              }
+            })
+          )
+        })
+        return fields
+      }
+
+      function drawBoard() {
+        context.beginPath()
+
+        context.fillStyle = "#424"
+        context.fillRect(0, 0, WIDTH, HEIGHT)
+
+        boardFields.forEach(({ index, label, x, y }) => {
+          context.fillStyle = "#262"
+          context.fillRect(x, y, FIELD_SIDE, FIELD_SIDE)
+          context.fillStyle = "#424"
+          context.font = "20px monospace"
+          context.fillText(label, x + 5, y + FIELD_SIDE - 10)
+        })
+      }
+
+      function getXPos(playerIndex) {
+        const isPlayer1 = playerIndex % 2 === 0
+        const sideFactor = isPlayer1 ? -1 : 1
+        return WIDTH / 2 + (WIDTH / 3) * sideFactor
+      }
+
+      function getDieRect(playerIndex) {
+        return [
+          /* x */ getXPos(playerIndex) - FIELD_SIDE,
+          /* y */ HEIGHT - (FIELD_SIDE * 7) / 3,
+          /* width */ FIELD_SIDE * 2,
+          /* height */ FIELD_SIDE * 2,
+        ]
+      }
+
+      function getPlayerSummaryRect(playerIndex) {
+        return [
+          /* x */ getXPos(playerIndex) - FIELD_SIDE,
+          /* y */ FIELD_SIDE / 2,
+          /* width */ (WIDTH * 2) / 8,
+          /* height */ (HEIGHT * 2) / 3,
+        ]
+      }
+
+      function drawPlayerSummary(playerIndex) {
+        const isPlayer1 = playerIndex % 2 === 0
+        const sideFactor = isPlayer1 ? -1 : 1
+
+        context.beginPath()
+
+        const xPos = getXPos(playerIndex)
+        const yPos = FIELD_SIDE
+        context.fillStyle = isPlayer1 ? "#aa4" : "#77b"
+        context.strokeStyle = isPlayer1 ? "#aa4" : "#77b"
+        context.font = "20px monospace"
+        context.fillText(`Player ${playerIndex + 1}`, xPos - 50, yPos)
+        gameState.players[playerIndex].pawns
+          .filter((position) => position === HOME_POSITION)
+          .forEach((position, index) => {
+            context.fillRect(
+              xPos - (sideFactor * FIELD_SIDE) / 3,
+              30 + yPos + index * (FIELD_SIDE / 3 + 15),
+              FIELD_SIDE / 3,
+              FIELD_SIDE / 3
+            )
+          })
+
+        context.lineWidth = "4"
+        context.strokeRect(...getPlayerSummaryRect(playerIndex))
+        if (
+          playerIndex === gameState.currentPlayerIndex &&
+          gameState.players[playerIndex].pawns.every(
+            (position) => position !== START_POSITION
+          )
+        ) {
+          context.fillText(
+            "new pawn",
+            xPos - (FIELD_SIDE * 3) / 4,
+            FIELD_SIDE * 5.25 + yPos
+          )
+        }
+
+        const dieYPos = HEIGHT - (FIELD_SIDE * 7) / 3
+
+        context.lineWidth = "8"
+        context.strokeRect(...getDieRect(playerIndex))
+        if (gameState.players[playerIndex].rollResult !== null) {
+          context.font = "45px monospace"
+          context.fillText(
+            gameState.players[playerIndex].rollResult,
+            xPos - 15,
+            dieYPos + (FIELD_SIDE * 5) / 4
+          )
+        } else if (gameState.currentPlayerIndex === playerIndex) {
+          context.font = "20px monospace"
+          context.fillText("roll", xPos - 25, dieYPos + (FIELD_SIDE * 7) / 6)
+        }
+
+        // won pawns
+        context.fillStyle = isPlayer1 ? "#dda" : "#bbf"
+        context.strokeStyle = isPlayer1 ? "#dda" : "#bbf"
+        gameState.players[playerIndex].pawns
+          .filter((position) => position === FINISH_POSITION)
+          .forEach((position, index) => {
+            context.fillRect(
+              xPos + (sideFactor * FIELD_SIDE) / 2,
+              30 + yPos + index * (FIELD_SIDE / 3 + 15),
+              FIELD_SIDE / 3,
+              FIELD_SIDE / 3
+            )
+          })
+      }
+    </script>
+  </head>
+  <body onload="init()"></body>
+</html>
