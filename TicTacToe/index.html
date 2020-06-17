@@ -1,0 +1,168 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      const WIDTH = 500
+      const HEIGHT = 500
+
+      const CELLS_PER_AXIS = 3
+
+      const CELL_WIDTH = WIDTH / CELLS_PER_AXIS
+      const CELL_HEIGHT = HEIGHT / CELLS_PER_AXIS
+
+      let context = null
+
+      let game_state = {
+        currentPlayer: "x",
+        board: {},
+        status: "running",
+      }
+
+      function main() {
+        const canvas = document.createElement("canvas")
+        canvas.addEventListener("mousedown", (event) => {
+          const { left, top } = canvas.getBoundingClientRect()
+          const [actualX, actualY] = [event.x - left, event.y - top]
+
+          if (game_state.status === "running") {
+            playerTurn(
+              Math.floor(actualX / CELL_WIDTH),
+              Math.floor(actualY / CELL_HEIGHT)
+            )
+
+            const winner = calculateWinner()
+
+            if (winner) {
+              game_state.status = winner
+            }
+          } else {
+            game_state.status = "running"
+            game_state.board = {}
+          }
+
+          drawGameState()
+        })
+
+        canvas.width = WIDTH
+        canvas.height = HEIGHT
+
+        context = canvas.getContext("2d")
+        drawGameState()
+
+        document.body.appendChild(canvas)
+      }
+
+      function calculateWinner() {
+        // horizontal
+        for (let y = 0; y < CELLS_PER_AXIS; y++) {
+          const checkArray = Array.from({ length: CELLS_PER_AXIS }).map(
+            (_, x) => game_state.board[[x, y]]
+          )
+          if (
+            checkArray[0] !== undefined &&
+            checkArray.every((item) => item === checkArray[0])
+          ) {
+            return checkArray[0]
+          }
+        }
+
+        // vertical
+        for (let x = 0; x < CELLS_PER_AXIS; x++) {
+          const checkArray = Array.from({ length: CELLS_PER_AXIS }).map(
+            (_, y) => game_state.board[[x, y]]
+          )
+          if (
+            checkArray[0] !== undefined &&
+            checkArray.every((item) => item === checkArray[0])
+          ) {
+            return checkArray[0]
+          }
+        }
+
+        // diagonal top left -> bottom right
+        let checkArray = Array.from({ length: CELLS_PER_AXIS }).map(
+          (_, xy) => game_state.board[[xy, xy]]
+        )
+        if (
+          checkArray[0] !== undefined &&
+          checkArray.every((item) => item === checkArray[0])
+        ) {
+          return checkArray[0]
+        }
+
+        // diagonal top right -> bottom left
+        checkArray = Array.from({ length: CELLS_PER_AXIS }).map(
+          (_, y) => game_state.board[[CELLS_PER_AXIS - 1 - y, y]]
+        )
+        if (
+          checkArray[0] !== undefined &&
+          checkArray.every((item) => item === checkArray[0])
+        ) {
+          return checkArray[0]
+        }
+
+        const boardKeys = Object.keys(game_state.board)
+        if (
+          boardKeys.length === CELLS_PER_AXIS * CELLS_PER_AXIS &&
+          boardKeys.every((key) => game_state.board[key] !== undefined)
+        ) {
+          return "nobody"
+        }
+      }
+
+      function playerTurn(x, y) {
+        if (!game_state.board[[x, y]]) {
+          game_state.board[[x, y]] = game_state.currentPlayer
+
+          if (game_state.currentPlayer === "x") {
+            game_state.currentPlayer = "o"
+          } else {
+            game_state.currentPlayer = "x"
+          }
+        }
+      }
+
+      function drawGameState() {
+        context.beginPath()
+        context.fillStyle = "#222"
+        context.fillRect(0, 0, WIDTH, HEIGHT)
+
+        for (let x = 0; x < CELLS_PER_AXIS; x++) {
+          context.moveTo(x * CELL_WIDTH, 0)
+          context.lineTo(x * CELL_WIDTH, HEIGHT)
+          for (let y = 0; y < CELLS_PER_AXIS; y++) {
+            context.moveTo(0, y * CELL_HEIGHT)
+            context.lineTo(WIDTH, y * CELL_HEIGHT)
+          }
+        }
+        context.strokeStyle = "#ffdfdf"
+        context.stroke()
+        Object.keys(game_state.board).forEach((key) => {
+          const [x, y] = key.split(",")
+          drawOX(game_state.board[key], x, y)
+        })
+
+        if (game_state.status !== "running") {
+          context.font = "50px monospace"
+          context.fillStyle = "#aaa"
+          context.fillText(
+            `${game_state.status} won!`,
+            (WIDTH * 2) / 6,
+            HEIGHT / 2
+          )
+        }
+      }
+
+      function drawOX(o, x, y, mo, r, on) {
+        context.fillStyle = o === "x" ? "#4a3" : "#a43"
+        context.font = "100px monospace"
+        context.fillText(
+          o,
+          x * CELL_WIDTH + CELL_WIDTH / 3,
+          y * CELL_HEIGHT + (CELL_HEIGHT * 2) / 3
+        )
+      }
+    </script>
+  </head>
+  <body onload="main()"></body>
+</html>
