@@ -1,0 +1,224 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      const width = 900 / 2
+      const height = 600 / 2
+      let gameLoopInterval = null
+      const keyState = {}
+      const mainColor = "#684949"
+      const accentColor = "#7fd5d8"
+
+      function init() {
+        document.body.style.backgroundColor = mainColor
+
+        document.addEventListener("keydown", (event) => {
+          keyState[event.key] = true
+        })
+        document.addEventListener("keyup", (event) => {
+          keyState[event.key] = false
+        })
+
+        const canvasElement = document.createElement("canvas")
+        canvasElement.width = width
+        canvasElement.height = height
+        document.body.appendChild(canvasElement)
+        const context = canvasElement.getContext("2d")
+
+        const drawBall = function () {
+          const {
+            position: { x, y },
+          } = this
+          const scale = 4
+          context.beginPath()
+          context.moveTo(x - 1 * scale, y - 1 * scale)
+          context.lineTo(x + 1 * scale, y - 1 * scale)
+          context.lineTo(x + 1 * scale, y + 1 * scale)
+          context.lineTo(x - 1 * scale, y + 1 * scale)
+          context.closePath()
+          context.fillStyle = mainColor
+          context.fill()
+        }
+
+        const barHeight = 64
+
+        const drawPlayer = (x, y, score, xText) => {
+          context.beginPath()
+          context.moveTo(x - 4, y - barHeight / 2)
+          context.lineTo(x + 4, y - barHeight / 2)
+          context.lineTo(x + 4, y + barHeight / 2)
+          context.lineTo(x - 4, y + barHeight / 2)
+          context.closePath()
+          context.fillStyle = mainColor
+          context.fill()
+
+          context.beginPath()
+          context.font = "32px monospace"
+          context.fillText(score, xText, 30)
+        }
+        const drawPlayer1 = function () {
+          drawPlayer(
+            this.position.x,
+            this.position.y,
+            this.currentScore,
+            width / 2 - width / 8
+          )
+        }
+        const drawPlayer2 = function () {
+          drawPlayer(
+            this.position.x,
+            this.position.y,
+            this.currentScore,
+            width / 2 + width / 8
+          )
+        }
+
+        const simulatePlayers = function (otherObjects) {
+          this.position.y += this.velocity.y
+
+          if (
+            this.position.y + barHeight / 2 > height ||
+            this.position.y - barHeight / 2 < 0
+          ) {
+            this.position.y -= this.velocity.y * 2
+            this.velocity.y *= -1
+          }
+        }
+
+        const player1 = {
+          id: "player1",
+          position: { x: 10, y: height / 2 },
+          velocity: { x: 0, y: 0 },
+          draw: drawPlayer1,
+          simulate: simulatePlayers,
+          input: function () {
+            this.velocity.y = 0
+            if (keyState.ArrowUp) {
+              this.velocity.y = -2
+            }
+            if (keyState.ArrowDown) {
+              this.velocity.y = 2
+            }
+          },
+          currentScore: 0,
+        }
+
+        const player2 = {
+          id: "player2",
+          position: { x: width - 10, y: height / 2 },
+          velocity: { x: 0, y: 0 },
+          draw: drawPlayer2,
+          simulate: simulatePlayers,
+          input: function () {
+            this.velocity.y = 0
+            if (keyState.PageUp) {
+              this.velocity.y = -2
+            }
+            if (keyState.PageDown) {
+              this.velocity.y = 2
+            }
+          },
+          currentScore: 0,
+        }
+
+        function velocityDirection(direction, speed) {
+          return {
+            x: Math.cos(direction) * speed,
+            y: Math.sin(direction) * speed,
+          }
+        }
+
+        const simulateBall = function () {
+          this.position.x += this.velocity.x
+          this.position.y += this.velocity.y
+
+          if (
+            this.position.x < player1.position.x &&
+            this.position.y > player1.position.y - barHeight / 2 &&
+            this.position.y < player1.position.y + barHeight / 2
+          ) {
+            this.position.x -= this.velocity.x * 2
+            this.velocity.x *= -1
+          }
+          if (
+            this.position.x > player2.position.x &&
+            this.position.y > player2.position.y - barHeight / 2 &&
+            this.position.y < player2.position.y + barHeight / 2
+          ) {
+            this.position.x -= this.velocity.x * 2
+            this.velocity.x *= -1
+          }
+
+          if (this.position.x > width) {
+            player1.currentScore++
+            this.position.x = width / 2
+            this.position.y = height / 2
+
+            // +45° to -45°
+            const degrees =
+              ((Math.random() > 0.5 ? 1 : -1) * Math.random() * Math.PI) / 4
+            this.velocity = velocityDirection(degrees, 2)
+          }
+          if (this.position.x < 0) {
+            player2.currentScore++
+            this.position.x = width / 2
+            this.position.y = height / 2
+
+            // 135° to 225°
+            const degrees = (Math.random() * Math.PI) / 2 + (Math.PI * 3) / 4
+            this.velocity = velocityDirection(degrees, 2)
+          }
+
+          if (this.position.y > height || this.position.y < 0) {
+            this.position.y -= this.velocity.y * 2
+            this.velocity.y *= -1
+          }
+        }
+
+        const ball = {
+          position: { x: width / 2, y: height / 2 },
+          velocity: { x: 2, y: 1 },
+          draw: drawBall,
+          simulate: simulateBall,
+        }
+
+        gameLoopInterval = window.setInterval(
+          () => gameLoop(context, [ball, player1, player2]),
+          16
+        )
+      }
+
+      function gameLoop(context, objects) {
+        input(objects)
+        simulate(objects)
+        draw(context, objects)
+
+        const winner = objects.find((obj) => obj.currentScore >= 5)
+        if (winner) {
+          clearInterval(gameLoopInterval)
+          context.beginPath()
+          context.fillStyle = mainColor
+
+          const begin = width / 15
+          context.fillText("You won!", begin, height / 3, width - begin * 2)
+        }
+      }
+
+      function simulate(objects) {
+        objects.forEach((object, index) => object.simulate())
+      }
+
+      function draw(context, objects) {
+        context.fillStyle = accentColor
+        context.fillRect(0, 0, 1000, 1000)
+
+        objects.forEach((object) => object.draw())
+      }
+
+      function input(objects) {
+        objects.forEach((object) => (object.input ? object.input() : null))
+      }
+    </script>
+  </head>
+  <body onload="init()"></body>
+</html>
