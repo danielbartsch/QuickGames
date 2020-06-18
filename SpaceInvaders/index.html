@@ -264,23 +264,23 @@
 
       function draw() {
         context.beginPath()
-        context.fillStyle = "#222"
+        context.fillStyle = "#181a3e"
         context.fillRect(0, 0, WIDTH, HEIGHT)
 
-        context.fillStyle = "#aaa"
+        context.fillStyle = "#8df9ed"
         drawShip()
 
         gameState.shipProjectiles.forEach(([x, y]) => {
           context.fillRect(x - 2, y - 2, 4, 4)
         })
 
-        context.fillStyle = "#a44"
+        context.fillStyle = "#f94143"
         gameState.enemies.forEach(([x, y]) => drawEnemy(x, y))
         gameState.enemyProjectiles.forEach(([x, y]) => {
           context.fillRect(x - 2, y - 2, 4, 4)
         })
 
-        context.fillStyle = "#aaa"
+        context.fillStyle = "#8df9ed"
         context.font = "25px monospace"
         context.fillText(
           "Level " + (gameState.currentLevel + 1),
