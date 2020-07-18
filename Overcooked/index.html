@@ -1,0 +1,436 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      const HEIGHT = 500
+      const WIDTH = 500
+
+      const STAGE_ELEMENT_SIZE = 50
+
+      let context
+      let gameLoopInterval
+
+      const STAGE = {
+        FLOOR: 0,
+        SALAD: 1,
+        CUT_SALAD: 2,
+      }
+
+      const STAGE_BLOCKING = {
+        CUTTING_STATION: 100,
+        HANDOUT: 200,
+        SALAD_DISPENSER: 101,
+      }
+
+      const gameState = {
+        player: {
+          position: [1, 1],
+          direction: [-1, 0],
+          item: null,
+        },
+        stage: {
+          "0,0": [STAGE.FLOOR],
+          "0,1": [STAGE.FLOOR],
+          "0,2": [STAGE.FLOOR],
+          "1,0": [STAGE.FLOOR],
+          "1,1": [STAGE.FLOOR],
+          "1,2": [STAGE.FLOOR],
+          "2,0": [STAGE.FLOOR],
+          "2,1": [STAGE.FLOOR],
+          "2,2": [STAGE.FLOOR],
+          "3,1": [STAGE.FLOOR],
+          "4,1": [STAGE.FLOOR],
+          "4,2": [STAGE.FLOOR, STAGE_BLOCKING.SALAD_DISPENSER],
+          "5,0": [STAGE.FLOOR],
+          "5,1": [STAGE.FLOOR],
+          "5,2": [STAGE.FLOOR],
+          "5,3": [STAGE.FLOOR],
+          "5,4": [STAGE.FLOOR],
+          "5,5": [STAGE.FLOOR],
+          "6,0": [STAGE.FLOOR, STAGE_BLOCKING.CUTTING_STATION],
+          "6,1": [STAGE.FLOOR],
+          "6,2": [STAGE.FLOOR],
+          "6,3": [STAGE.FLOOR],
+          "6,4": [STAGE.FLOOR],
+          "6,5": [STAGE.FLOOR],
+          "6,6": [STAGE.FLOOR, STAGE_BLOCKING.HANDOUT],
+          "7,0": [STAGE.FLOOR],
+          "7,1": [STAGE.FLOOR],
+          "7,2": [STAGE.FLOOR],
+          "7,3": [STAGE.FLOOR],
+          "7,4": [STAGE.FLOOR],
+          "7,5": [STAGE.FLOOR],
+        },
+        currentLevel: 0,
+      }
+
+      const levels = [
+        [[STAGE.CUT_SALAD, 3]],
+        [
+          [STAGE.SALAD, 2],
+          [STAGE.CUT_SALAD, 2],
+        ],
+      ]
+
+      const keyboardState = {}
+
+      function init() {
+        const element = document.createElement("canvas")
+
+        document.addEventListener("keydown", (event) => {
+          keyboardState[event.key] = true
+        })
+        document.addEventListener("keyup", (event) => {
+          keyboardState[event.key] = false
+        })
+
+        element.height = HEIGHT
+        element.width = WIDTH
+
+        context = element.getContext("2d")
+
+        document.body.appendChild(element)
+
+        context.beginPath()
+        context.fillStyle = "#222"
+        context.fillRect(0, 0, WIDTH, HEIGHT)
+
+        gameLoopInterval = setInterval(gameLoop, 16)
+      }
+
+      function gameLoop() {
+        if (gameState.currentLevel < levels.length) {
+          logic()
+        }
+        draw()
+      }
+
+      let lastPositionChange = 0
+      let lastPickup = 0
+
+      function logic() {
+        const [x, y] = gameState.player.position
+
+        let nextPosition = [x, y]
+        if (keyboardState.ArrowLeft) {
+          gameState.player.direction = [-1, 0]
+          nextPosition = [x - 1, y]
+        }
+        if (keyboardState.ArrowUp) {
+          gameState.player.direction = [0, -1]
+          nextPosition = [x, y - 1]
+        }
+        if (keyboardState.ArrowRight) {
+          gameState.player.direction = [1, 0]
+          nextPosition = [x + 1, y]
+        }
+        if (keyboardState.ArrowDown) {
+          gameState.player.direction = [0, 1]
+          nextPosition = [x, y + 1]
+        }
+        if (keyboardState[" "]) {
+          const [playerX, playerY] = gameState.player.position
+          const [directionX, directionY] = gameState.player.direction
+
+          const targetPosition = [playerX + directionX, playerY + directionY]
+          if (
+            Object.keys(gameState.stage).includes(String(targetPosition)) &&
+            new Date().getTime() - lastPickup > 200
+          ) {
+            if (gameState.player.item) {
+              if (
+                gameState.stage[targetPosition].includes(
+                  STAGE_BLOCKING.CUTTING_STATION
+                )
+              ) {
+                if (gameState.player.item === STAGE.SALAD) {
+                  gameState.stage[targetPosition].push(STAGE.CUT_SALAD)
+                }
+              } else if (
+                gameState.stage[targetPosition].includes(STAGE_BLOCKING.HANDOUT)
+              ) {
+                levels[gameState.currentLevel] = levels[gameState.currentLevel]
+                  .map(([ingredient, count]) => {
+                    const newCount =
+                      ingredient === gameState.player.item ? count - 1 : count
+                    return [ingredient, newCount < 0 ? 0 : newCount]
+                  })
+                  .filter(([ingredient, count]) => count > 0)
+
+                if (levels[gameState.currentLevel].length === 0) {
+                  gameState.currentLevel++
+                }
+              } else {
+                gameState.stage[targetPosition].push(gameState.player.item)
+              }
+              gameState.player.item = null
+            } else {
+              if (
+                gameState.stage[targetPosition].includes(
+                  STAGE_BLOCKING.SALAD_DISPENSER
+                )
+              ) {
+                gameState.player.item = STAGE.SALAD
+              }
+              if (
+                gameState.stage[targetPosition].length > 1 &&
+                !Object.values(STAGE_BLOCKING).includes(
+                  gameState.stage[targetPosition][
+                    gameState.stage[targetPosition].length - 1
+                  ]
+                )
+              ) {
+                gameState.player.item = gameState.stage[targetPosition].pop()
+              }
+            }
+            lastPickup = new Date().getTime()
+          }
+        }
+
+        if (
+          (nextPosition[0] !== x || nextPosition[1] !== y) &&
+          new Date().getTime() - lastPositionChange > 200 &&
+          Object.keys(gameState.stage).includes(String(nextPosition)) &&
+          gameState.stage[nextPosition].every(
+            (item) =>
+              !Object.keys(STAGE_BLOCKING).some(
+                (stageKey) => STAGE_BLOCKING[stageKey] === item
+              )
+          )
+        ) {
+          gameState.player.position = nextPosition
+          lastPositionChange = new Date().getTime()
+        }
+      }
+
+      function draw() {
+        context.fillStyle = "#222"
+        context.fillRect(0, 0, WIDTH, HEIGHT)
+        Object.keys(gameState.stage).forEach((coordinates) => {
+          const [x, y] = coordinates.split(",")
+          const padding = 5
+
+          const elementX = x * (STAGE_ELEMENT_SIZE + padding)
+          const elementY = y * (STAGE_ELEMENT_SIZE + padding)
+
+          drawElements(gameState.stage[coordinates], elementX, elementY)
+
+          if (coordinates === String(gameState.player.position)) {
+            context.fillStyle = "#a44"
+            context.fillRect(
+              elementX + STAGE_ELEMENT_SIZE / 4,
+              elementY + STAGE_ELEMENT_SIZE / 4,
+              STAGE_ELEMENT_SIZE / 2,
+              STAGE_ELEMENT_SIZE / 2
+            )
+            context.fillStyle = "#555"
+            switch (String(gameState.player.direction)) {
+              case String([-1, 0]):
+                context.fillRect(
+                  elementX + STAGE_ELEMENT_SIZE / 4,
+                  elementY + (STAGE_ELEMENT_SIZE / 2 - STAGE_ELEMENT_SIZE / 10),
+                  STAGE_ELEMENT_SIZE / 5,
+                  STAGE_ELEMENT_SIZE / 5
+                )
+                break
+              case String([0, -1]):
+                context.fillRect(
+                  elementX + (STAGE_ELEMENT_SIZE / 2 - STAGE_ELEMENT_SIZE / 10),
+                  elementY + STAGE_ELEMENT_SIZE / 4,
+                  STAGE_ELEMENT_SIZE / 5,
+                  STAGE_ELEMENT_SIZE / 5
+                )
+                break
+              case String([1, 0]):
+                context.fillRect(
+                  elementX + STAGE_ELEMENT_SIZE / 2,
+                  elementY + (STAGE_ELEMENT_SIZE / 2 - STAGE_ELEMENT_SIZE / 10),
+                  STAGE_ELEMENT_SIZE / 5,
+                  STAGE_ELEMENT_SIZE / 5
+                )
+                break
+              case String([0, 1]):
+                context.fillRect(
+                  elementX + (STAGE_ELEMENT_SIZE / 2 - STAGE_ELEMENT_SIZE / 10),
+                  elementY + STAGE_ELEMENT_SIZE / 2,
+                  STAGE_ELEMENT_SIZE / 5,
+                  STAGE_ELEMENT_SIZE / 5
+                )
+                break
+            }
+            drawElements([gameState.player.item], elementX, elementY)
+          }
+        })
+
+        if (gameState.currentLevel >= levels.length) {
+          drawGameOver()
+        } else {
+          drawLevelGoal()
+        }
+      }
+
+      function drawLevelGoal() {
+        context.fillStyle = "rgba(255,190,255,0.1)"
+        const height = WIDTH / 8
+        const x = WIDTH / 4
+        const y = HEIGHT - height
+        context.fillRect(WIDTH / 4, HEIGHT - WIDTH / 8, WIDTH / 2, height)
+        levels[gameState.currentLevel].forEach(
+          ([ingredient, count], index, array) => {
+            drawElements([ingredient], x + STAGE_ELEMENT_SIZE * index, y)
+            context.font = "12px monospace"
+            context.fillStyle = "#aaa"
+            context.fillText(
+              count,
+              x + STAGE_ELEMENT_SIZE * index + (STAGE_ELEMENT_SIZE * 4) / 5,
+              y + (STAGE_ELEMENT_SIZE * 6) / 11
+            )
+          }
+        )
+      }
+
+      function drawGameOver() {
+        context.fillStyle = "#fff"
+        context.font = "24px monospace"
+        context.fillText("You won!", WIDTH / 2, HEIGHT / 2)
+      }
+
+      function drawElements(items, x, y) {
+        items.forEach((item) => {
+          switch (item) {
+            case STAGE_BLOCKING.SALAD_DISPENSER:
+              context.fillStyle = "#999"
+              context.fillRect(
+                x + STAGE_ELEMENT_SIZE / 8,
+                y + STAGE_ELEMENT_SIZE / 8,
+                (STAGE_ELEMENT_SIZE * 3) / 4,
+                (STAGE_ELEMENT_SIZE * 3) / 4
+              )
+            case STAGE.SALAD:
+              context.fillStyle = "#474"
+              context.fillRect(
+                x + STAGE_ELEMENT_SIZE / 3,
+                y + STAGE_ELEMENT_SIZE / 3,
+                STAGE_ELEMENT_SIZE / 3,
+                STAGE_ELEMENT_SIZE / 3
+              )
+              break
+            case STAGE.CUT_SALAD:
+              context.fillStyle = "#494"
+              context.fillRect(
+                x + STAGE_ELEMENT_SIZE / 3,
+                y + STAGE_ELEMENT_SIZE / 3,
+                STAGE_ELEMENT_SIZE / 10,
+                STAGE_ELEMENT_SIZE / 3
+              )
+              context.fillRect(
+                x + STAGE_ELEMENT_SIZE / 3 + STAGE_ELEMENT_SIZE / 8,
+                y + STAGE_ELEMENT_SIZE / 3,
+                STAGE_ELEMENT_SIZE / 10,
+                STAGE_ELEMENT_SIZE / 3
+              )
+              context.fillRect(
+                x + STAGE_ELEMENT_SIZE / 3 + STAGE_ELEMENT_SIZE / 4,
+                y + STAGE_ELEMENT_SIZE / 3,
+                STAGE_ELEMENT_SIZE / 10,
+                STAGE_ELEMENT_SIZE / 3
+              )
+              break
+            case STAGE.FLOOR:
+              context.fillStyle = "#555"
+              context.fillRect(x, y, STAGE_ELEMENT_SIZE, STAGE_ELEMENT_SIZE)
+              break
+            case STAGE_BLOCKING.HANDOUT:
+              context.fillStyle = "#4a4"
+              context.beginPath()
+              context.moveTo(
+                x + (STAGE_ELEMENT_SIZE * 5) / 8,
+                y + (STAGE_ELEMENT_SIZE * 1) / 8
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 3) / 8,
+                y + (STAGE_ELEMENT_SIZE * 1) / 8
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 3) / 8,
+                y + (STAGE_ELEMENT_SIZE * 5) / 8
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 2) / 8,
+                y + (STAGE_ELEMENT_SIZE * 5) / 8
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 4) / 8,
+                y + (STAGE_ELEMENT_SIZE * 7) / 8
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 6) / 8,
+                y + (STAGE_ELEMENT_SIZE * 5) / 8
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 5) / 8,
+                y + (STAGE_ELEMENT_SIZE * 5) / 8
+              )
+              context.fill()
+              break
+            case STAGE_BLOCKING.CUTTING_STATION:
+              context.fillStyle = "#999"
+              context.fillRect(
+                x + STAGE_ELEMENT_SIZE / 8,
+                y + STAGE_ELEMENT_SIZE / 8,
+                (STAGE_ELEMENT_SIZE * 3) / 4,
+                (STAGE_ELEMENT_SIZE * 3) / 4
+              )
+              context.fillStyle = "#222"
+              context.beginPath()
+              context.moveTo(
+                x + (STAGE_ELEMENT_SIZE * 12) / 16,
+                y + (STAGE_ELEMENT_SIZE * 5) / 16
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 9) / 16,
+                y + (STAGE_ELEMENT_SIZE * 8) / 16
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 8) / 16,
+                y + (STAGE_ELEMENT_SIZE * 7) / 16
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 11) / 16,
+                y + (STAGE_ELEMENT_SIZE * 4) / 16
+              )
+              context.fill()
+              context.beginPath()
+              context.fillStyle = "#ccc"
+              context.moveTo(
+                x + (STAGE_ELEMENT_SIZE * 8) / 16,
+                y + (STAGE_ELEMENT_SIZE * 7) / 16
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 3) / 16,
+                y + (STAGE_ELEMENT_SIZE * 12) / 16
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 7) / 16,
+                y + (STAGE_ELEMENT_SIZE * 11) / 16
+              )
+              context.lineTo(
+                x + (STAGE_ELEMENT_SIZE * 10) / 16,
+                y + (STAGE_ELEMENT_SIZE * 9) / 16
+              )
+              context.fill()
+              break
+          }
+        })
+        const ingredientCount = items.filter((item) => item !== STAGE.FLOOR)
+          .length
+        if (ingredientCount > 1) {
+          context.fillStyle = "#222"
+          context.font = "12px monospace"
+          context.fillText(ingredientCount, x + 5, y + STAGE_ELEMENT_SIZE / 3)
+        }
+      }
+    </script>
+  </head>
+  <body onload="init()"></body>
+</html>
